@@ -1,4 +1,10 @@
 <?php
+
+// Don't load directly
+if (!defined('ABSPATH')) {
+    die('-1');
+}
+
 if (!class_exists('wpttuts_roles')) {
     class wpttuts_roles
     {
@@ -24,16 +30,19 @@ if (!class_exists('wpttuts_roles')) {
         private $users;
 
         /**
-         * Creates a new instance of the Roles Class 
+         * Creates a new instance of the Roles Class
          *
          * @param boolean $all
          * @param array $roles
          * @param array $users
          */
-        function __construct($all = false, $roles = array(), $users = array())
+        function __construct()
         {
             // Set the allowed entities
-            $this->set_entities($all, $roles, $users);
+            $this->set_entities();
+
+            // Create the MetaBox user view
+            $this->metabox_user();
 
             // Set the user access permission
             $this->set_permissions();
@@ -48,13 +57,83 @@ if (!class_exists('wpttuts_roles')) {
          *
          * @param boolean $all
          * @param array $roles
-         * @param array $users    
+         * @param array $users
          */
-        private function set_entities($all, $roles, $users)
+        private function set_entities()
         {
-            $this->all = $all;
+            $settings = get_option('wptuts_settings');
+            $roles = $settings['client_roles'];
+
+            // ALL rule
+            if (isset($roles['all']) && $roles['all'] === 'on') {
+                $this->all = true;
+            } else {
+                $this->all = false;
+            }
+
+            // Roles rule
             $this->roles = $roles;
-            $this->users = $users;
+            unset($this->roles['all']);
+
+            // Users rule
+            $this->users = get_users(array('meta_key' => 'wptuts_client', 'meta_value' => true, 'fields' => 'ID'));
+        }
+
+        /**
+         * User Metabox hooks
+         */
+        private function metabox_user()
+        {
+            // Display the metabox
+            add_action('show_user_profile', array(&$this, 'display_metabox'));
+            add_action('edit_user_profile', array(&$this, 'display_metabox'));
+
+            // Save update
+            add_action('personal_options_update', array(&$this, 'update_metabox'));
+            add_action('edit_user_profile_update', array(&$this, 'update_metabox'));
+        }
+
+        /**
+         * Display the AdPress Form
+         *
+         * @param object $user
+         */
+        public function display_metabox($user)
+        {
+            $user_meta = get_user_meta($user->ID, 'wptuts_client', true);
+            if ($user_meta) {
+                $checked = 'checked';
+            } else {
+                $checked = '';
+            }
+
+            print <<<form
+<h3>WPTuts Client</h3>
+<table class="form-table">
+    <tr>
+        <th><label for="wptuts_client">Enable Client Access</label></th>
+        <td><input type="checkbox" name="wptuts_client" id="wptuts_client" $checked/> Enable Access to the WPTtus Plugin Client Dashboard</td>
+    </tr>
+</table>
+form;
+
+
+        }
+
+        /**
+         * Update the user MetaBox
+         *
+         * @param integer $user_id
+         */
+        public function update_metabox($user_id)
+        {
+            if (isset($_POST['wptuts_client']) && $_POST['wptuts_client'] === 'on') {
+                $checked = true;
+            } else {
+                $checked = false;
+            }
+            update_user_meta($user_id, 'wptuts_client', $checked);
+
         }
 
         /**
